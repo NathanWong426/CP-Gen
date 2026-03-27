@@ -1,0 +1,5 @@
+{
+  "name": "AlgoTest GenAI",
+  "description": "A high-precision competitive programming test case generator using Gemini 1.5 Pro to analyze problems, identify edge cases, and generate comprehensive .in/.out datasets.",
+  "requestFramePermissions": []
+}
