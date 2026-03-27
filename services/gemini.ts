@@ -1,14 +1,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { TestCase } from '../types';
 
-const apiKey = process.env.API_KEY;
-if (!apiKey) {
-  console.error("API_KEY is missing from environment variables");
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
-
-const MODEL_NAME = 'gemini-3-pro-preview';
 
 /**
  * Helper function to retry API calls on 429 errors (Rate Limit)
@@ -35,8 +27,11 @@ async function withRetry<T>(operation: () => Promise<T>, retries = 5, delay = 40
 export const analyzeProblemAndPlan = async (
   statement: string,
   solution: string,
-  testCaseCount: number
+  testCaseCount: number,
+  modelName: string,
+  apiKey: string
 ): Promise<{ testPlan: Omit<TestCase, 'input' | 'expectedOutput' | 'status'>[] }> => {
+  const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
   
   const prompt = `
     你是一位世界总决赛级别的算法竞赛教练和出题人。
@@ -93,7 +88,7 @@ export const analyzeProblemAndPlan = async (
 
   try {
     const response = await withRetry(() => ai.models.generateContent({
-      model: MODEL_NAME,
+      model: modelName,
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -120,8 +115,11 @@ export const generateInputData = async (
   statement: string,
   caseDescription: string,
   caseType: string,
-  method: 'direct' | 'script'
+  method: 'direct' | 'script',
+  modelName: string,
+  apiKey: string
 ): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
   let prompt = "";
   
   if (method === 'script') {
@@ -161,7 +159,7 @@ export const generateInputData = async (
 
   try {
     const response = await withRetry(() => ai.models.generateContent({
-      model: MODEL_NAME,
+      model: modelName,
       contents: prompt,
       config: {
          thinkingConfig: { thinkingBudget: 1024 } 
@@ -185,8 +183,11 @@ export const generateExpectedOutput = async (
   statement: string,
   solution: string,
   inputData: string,
-  method: 'direct' | 'script'
+  method: 'direct' | 'script',
+  modelName: string,
+  apiKey: string
 ): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
   
   if (method === 'script') {
     return "NOTE: This test case uses a Python generator script.\n\n" +
@@ -224,7 +225,7 @@ export const generateExpectedOutput = async (
 
   try {
     const response = await withRetry(() => ai.models.generateContent({
-      model: MODEL_NAME,
+      model: modelName,
       contents: prompt,
       config: {
         thinkingConfig: { thinkingBudget: 2048 } // High budget for correct calculation

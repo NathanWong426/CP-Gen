@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ProblemContext } from '../types';
-import { Code2, FileText, Play, Settings, Clock, Hash } from 'lucide-react';
+import { Code2, FileText, Play, Settings, Clock, Hash, KeyRound } from 'lucide-react';
 
 interface ProblemFormProps {
   problemContext: ProblemContext;
@@ -19,6 +19,48 @@ export const ProblemForm: React.FC<ProblemFormProps> = ({
   const handleChange = (field: keyof ProblemContext, value: any) => {
     setProblemContext(prev => ({ ...prev, [field]: value }));
   };
+
+  const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([
+    { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro' },
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview' },
+    { id: 'gemini-3.0-flash', name: 'Gemini 3 Flash' },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' }
+  ]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      if (!problemContext.apiKey || problemContext.apiKey.length < 20) return;
+      setIsLoadingModels(true);
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${problemContext.apiKey}`);
+        if (!response.ok) throw new Error('Failed to fetch');
+        const data = await response.json();
+        const models = data.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini'))
+          .map((m: any) => ({
+             id: m.name.replace('models/', ''),
+             name: m.displayName || m.name.replace('models/', '')
+          }));
+        
+        if (models.length > 0) {
+          setAvailableModels(models);
+          // if current selected model is not in the fetched valid models list, auto-select the first valid one
+          if (!models.find((m: any) => m.id === problemContext.selectedModel)) {
+             setProblemContext(prev => ({ ...prev, selectedModel: models[0].id }));
+          }
+        }
+      } catch (e) {
+        console.error("Fetch models error:", e);
+      } finally {
+        setIsLoadingModels(false);
+      }
+    };
+
+    const timeoutId = setTimeout(fetchModels, 800); // 800ms debounce
+    return () => clearTimeout(timeoutId);
+  }, [problemContext.apiKey, problemContext.selectedModel, setProblemContext]);
 
   return (
     <div className="flex flex-col flex-1 gap-6">
@@ -54,8 +96,50 @@ export const ProblemForm: React.FC<ProblemFormProps> = ({
 
       {/* Configuration Section */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-6">
+        <div className="flex flex-wrap items-center gap-6 w-full md:w-auto flex-1">
           
+          {/* API Key Input */}
+          <div className="flex items-center gap-3 flex-1 min-w-[200px] max-w-sm">
+            <div className="flex items-center gap-2 text-gray-400 text-sm whitespace-nowrap">
+              <KeyRound className="w-4 h-4" />
+              <span>API Key:</span>
+            </div>
+            <input
+              type="password"
+              placeholder="Enter Gemini API Key..."
+              value={problemContext.apiKey}
+              onChange={(e) => handleChange('apiKey', e.target.value)}
+              disabled={isProcessing}
+              className="flex-1 bg-gray-950 border border-gray-700 rounded px-3 py-1 text-sm text-gray-300 focus:ring-1 focus:ring-blue-500 outline-none w-full"
+            />
+          </div>
+
+          <div className="w-px h-8 bg-gray-800 hidden md:block" />
+
+          {/* Model Selection */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-gray-400 text-sm">
+              <Settings className="w-4 h-4" />
+              <span>Model:</span>
+            </div>
+            <select
+              value={problemContext.selectedModel}
+              onChange={(e) => handleChange('selectedModel', e.target.value)}
+              disabled={isProcessing || isLoadingModels}
+              className="bg-gray-950 border border-gray-700 rounded px-2 py-1 text-sm text-gray-300 focus:ring-1 focus:ring-blue-500 outline-none w-48"
+            >
+              {isLoadingModels ? (
+                <option value={problemContext.selectedModel}>Loading...</option>
+              ) : (
+                availableModels.map(model => (
+                  <option key={model.id} value={model.id}>{model.name}</option>
+                ))
+              )}
+            </select>
+          </div>
+
+          <div className="w-px h-8 bg-gray-800 hidden md:block" />
+
           {/* Test Case Count */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-gray-400 text-sm">
@@ -110,10 +194,10 @@ export const ProblemForm: React.FC<ProblemFormProps> = ({
 
         <button
           onClick={onStart}
-          disabled={!problemContext.statement || !problemContext.solution || isProcessing}
+          disabled={!problemContext.statement || !problemContext.solution || !problemContext.apiKey || isProcessing}
           className={`
             flex items-center gap-2 px-8 py-2.5 rounded-lg font-semibold transition-all w-full md:w-auto justify-center
-            ${(!problemContext.statement || !problemContext.solution || isProcessing)
+            ${(!problemContext.statement || !problemContext.solution || !problemContext.apiKey || isProcessing)
               ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
               : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20'
             }

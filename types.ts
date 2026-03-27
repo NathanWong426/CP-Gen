@@ -16,6 +16,8 @@ export interface ProblemContext {
   testCaseCount: number;
   enableDelay: boolean;
   delaySeconds: number;
+  selectedModel: string;
+  apiKey: string;
 }
 
 export interface GenerationLog {

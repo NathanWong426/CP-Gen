@@ -14,7 +14,9 @@ const App: React.FC = () => {
     solution: '',
     testCaseCount: 5,
     enableDelay: true,
-    delaySeconds: 5
+    delaySeconds: 5,
+    selectedModel: 'gemini-3.1-pro',
+    apiKey: ''
   });
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [logs, setLogs] = useState<GenerationLog[]>([]);
@@ -40,7 +42,9 @@ const App: React.FC = () => {
       const analysis = await analyzeProblemAndPlan(
         problemContext.statement, 
         problemContext.solution,
-        problemContext.testCaseCount
+        problemContext.testCaseCount,
+        problemContext.selectedModel,
+        problemContext.apiKey
       );
       
       const plannedCases: TestCase[] = analysis.testPlan.map(p => ({
@@ -90,7 +94,9 @@ const App: React.FC = () => {
             problemContext.statement, 
             currentCase.description,
             currentCase.type,
-            currentCase.generationMethod
+            currentCase.generationMethod,
+            problemContext.selectedModel,
+            problemContext.apiKey
         );
         
         if (!generatedContent) throw new Error("Empty content generated");
@@ -142,7 +148,9 @@ const App: React.FC = () => {
              problemContext.statement,
              problemContext.solution,
              generatedContent, // Use the content we just got
-             currentCase.generationMethod
+             currentCase.generationMethod,
+             problemContext.selectedModel,
+             problemContext.apiKey
            );
    
            setTestCases(prev => prev.map(tc => tc.id === currentCase.id ? { 
