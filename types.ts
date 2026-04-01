@@ -1,3 +1,5 @@
+export type AiProvider = 'google' | 'laozhang';
+
 export interface TestCase {
   id: string;
   name: string;
@@ -17,7 +19,8 @@ export interface ProblemContext {
   enableDelay: boolean;
   delaySeconds: number;
   selectedModel: string;
-  apiKey: string;
+  provider: AiProvider;
+  apiKeys: Record<AiProvider, string>;
 }
 
 export interface GenerationLog {
@@ -27,10 +30,20 @@ export interface GenerationLog {
 }
 
 export enum GeneratorState {
-  IDLE = 'IDLE',
-  ANALYZING = 'ANALYZING',
-  PLAN_REVIEW = 'PLAN_REVIEW',
-  GENERATING_CASES = 'GENERATING_CASES',
-  COMPLETED = 'COMPLETED',
-  ERROR = 'ERROR'
+  IDLE = 'idle',
+  ANALYZING = 'analyzing',
+  PLAN_REVIEW = 'plan_review',
+  GENERATING_CASES = 'generating_cases',
+  COMPLETED = 'completed',
+  ERROR = 'error'
+}
+
+export interface GenerationRecord {
+  id: number;
+  date: number;
+  problemStatement: string;
+  solution: string;
+  testCases: TestCase[];
+  modelName: string;
+  provider: string;
 }

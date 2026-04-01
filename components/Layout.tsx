@@ -1,10 +1,14 @@
 import React from 'react';
 
+import { FileText, Clock } from 'lucide-react';
+
 interface LayoutProps {
   children: React.ReactNode;
+  currentView: 'generator' | 'history';
+  onViewChange: (view: 'generator' | 'history') => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) => {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col font-sans">
       <header className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
@@ -17,8 +21,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               AlgoGen
             </h1>
           </div>
-          <div className="text-sm text-gray-400">
-            Powered by Gemini 3 Pro
+          <div className="flex bg-gray-950 p-1 rounded-lg border border-gray-800">
+            <button
+              onClick={() => onViewChange('generator')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                currentView === 'generator' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              Generator
+            </button>
+            <button
+              onClick={() => onViewChange('history')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                currentView === 'history' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              History
+            </button>
           </div>
         </div>
       </header>

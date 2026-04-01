@@ -4,11 +4,16 @@ import { ProblemForm } from './components/ProblemForm';
 import { PlanReview } from './components/PlanReview';
 import { ResultsView } from './components/ResultsView';
 import { ProblemContext, TestCase, GeneratorState, GenerationLog } from './types';
-import { analyzeProblemAndPlan, generateInputData, generateExpectedOutput } from './services/gemini';
+import { analyzeProblemAndPlan, generateInputData, generateExpectedOutput } from './services/aiGenerator';
 import { runPythonScript } from './services/pyodide';
+import { executeCppWasm } from './services/wasmCppRunner';
 import { generateAndDownloadZip } from './utils/zipGenerator';
+import { HistoryView } from './components/HistoryView';
+import { saveGeneration } from './utils/db';
+import { GenerationRecord } from './types';
 
 const App: React.FC = () => {
+  const [currentView, setCurrentView] = useState<'generator' | 'history'>('generator');
   const [problemContext, setProblemContext] = useState<ProblemContext>({ 
     statement: '', 
     solution: '',
@@ -16,7 +21,11 @@ const App: React.FC = () => {
     enableDelay: true,
     delaySeconds: 5,
     selectedModel: 'gemini-3.1-pro',
-    apiKey: ''
+    provider: 'google',
+    apiKeys: {
+      google: '',
+      laozhang: ''
+    }
   });
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [logs, setLogs] = useState<GenerationLog[]>([]);
@@ -44,7 +53,8 @@ const App: React.FC = () => {
         problemContext.solution,
         problemContext.testCaseCount,
         problemContext.selectedModel,
-        problemContext.apiKey
+        problemContext.apiKeys[problemContext.provider],
+        problemContext.provider
       );
       
       const plannedCases: TestCase[] = analysis.testPlan.map(p => ({
@@ -96,7 +106,8 @@ const App: React.FC = () => {
             currentCase.type,
             currentCase.generationMethod,
             problemContext.selectedModel,
-            problemContext.apiKey
+            problemContext.apiKeys[problemContext.provider],
+            problemContext.provider
         );
         
         if (!generatedContent) throw new Error("Empty content generated");
@@ -136,32 +147,32 @@ const App: React.FC = () => {
         // Generate Output
         if (currentCase.generationMethod === 'script') {
            addLog(`Skipping AI output simulation for large script-generated data.`, 'info');
-           // We mark it as completed, but with empty output or a placeholder
             setTestCases(prev => prev.map(tc => tc.id === currentCase.id ? { 
                 ...tc, 
                 expectedOutput: "Output generation skipped for Script mode (Data too large/dynamic). Please generate .out locally.", 
                 status: 'completed' 
             } : tc));
         } else {
-           addLog(`Simulating output for ${currentCase.name}...`, 'thinking');
-           const outputData = await generateExpectedOutput(
-             problemContext.statement,
-             problemContext.solution,
-             generatedContent, // Use the content we just got
-             currentCase.generationMethod,
-             problemContext.selectedModel,
-             problemContext.apiKey
-           );
+           addLog(`Compiling and executing C++ via WebAssembly locally...`, 'thinking');
+           const result = await executeCppWasm(problemContext.solution, generatedContent);
    
-           setTestCases(prev => prev.map(tc => tc.id === currentCase.id ? { 
-             ...tc, 
-             expectedOutput: outputData, 
-             status: 'completed' 
-           } : tc));
+           if (!result.success) {
+              setTestCases(prev => prev.map(tc => tc.id === currentCase.id ? { 
+                ...tc, 
+                expectedOutput: `COMPILATION OR RUNTIME ERROR:\n${result.compileLogs}`, 
+                status: 'failed' 
+              } : tc));
+              addLog(`Case ${currentCase.name} C++ Execution Failed!`, 'error');
+           } else {
+              setTestCases(prev => prev.map(tc => tc.id === currentCase.id ? { 
+                ...tc, 
+                expectedOutput: result.output || '(No output returned)', 
+                status: 'completed' 
+              } : tc));
+              addLog(`Case ${currentCase.name} completed successfully. Local Output generated.`, 'success');
+           }
         }
         
-        addLog(`Case ${currentCase.name} completed successfully.`, 'success');
-
       } catch (err) {
         console.error(err);
         setTestCases(prev => prev.map(tc => tc.id === currentCase.id ? { ...tc, status: 'failed' } : tc));
@@ -171,6 +182,20 @@ const App: React.FC = () => {
 
     setState(GeneratorState.COMPLETED);
     addLog("All operations finished.", 'success');
+
+    // Save strictly to IndexedDB history
+    setTestCases(finalTestCases => {
+      saveGeneration({
+        id: Date.now(),
+        date: Date.now(),
+        problemStatement: problemContext.statement,
+        solution: problemContext.solution,
+        testCases: finalTestCases,
+        modelName: problemContext.selectedModel,
+        provider: problemContext.provider
+      }).catch(err => console.error("Could not save history:", err));
+      return finalTestCases;
+    });
   };
 
   const handleDownload = () => {
@@ -184,9 +209,25 @@ const App: React.FC = () => {
       setLogs([]);
   };
 
+  const handleLoadHistoryRecord = (record: GenerationRecord) => {
+      setProblemContext(prev => ({
+        ...prev,
+        statement: record.problemStatement,
+        solution: record.solution,
+        selectedModel: record.modelName,
+        provider: record.provider as any
+      }));
+      setTestCases(record.testCases);
+      setLogs([{ timestamp: Date.now(), message: "Loaded from history.", type: 'info' }]);
+      setState(GeneratorState.COMPLETED);
+      setCurrentView('generator');
+  };
+
   return (
-    <Layout>
-      {state === GeneratorState.IDLE ? (
+    <Layout currentView={currentView} onViewChange={setCurrentView}>
+      {currentView === 'history' ? (
+        <HistoryView onLoadGeneration={handleLoadHistoryRecord} />
+      ) : state === GeneratorState.IDLE ? (
         <ProblemForm 
           problemContext={problemContext}
           setProblemContext={setProblemContext}

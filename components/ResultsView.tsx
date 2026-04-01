@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TestCase, GenerationLog } from '../types';
 import { CheckCircle2, Circle, AlertCircle, Loader2, Download, Eye, FileCode, FileText, Code2, Database } from 'lucide-react';
+import { downloadSingleFile } from '../utils/downloadFile';
 
 interface ResultsViewProps {
   testCases: TestCase[];
@@ -33,6 +34,25 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ testCases, logs, onDow
     }
   };
 
+  const renderContent = (content: string | undefined, placeholder: string, maxLen = 3000) => {
+    if (!content) return <span className="text-gray-600 italic">{placeholder}</span>;
+    if (content.length <= maxLen) return content;
+
+    return (
+      <>
+        {content.substring(0, maxLen)}
+        <div className="mt-4 p-3 bg-blue-900/20 border border-blue-800/50 rounded-lg text-blue-400 text-xs italic flex items-center justify-between">
+          <span>... [Content truncated. Total size: {(contentLength(content)).toFixed(1)} KB]</span>
+          <span className="font-semibold px-2 text-blue-300">Download ZIP to view full content</span>
+        </div>
+      </>
+    );
+  };
+
+  const contentLength = (str: string) => {
+    return new Blob([str]).size / 1024;
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
       {/* Left: List */}
@@ -49,8 +69,8 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ testCases, logs, onDow
               key={tc.id}
               onClick={() => { setSelectedCaseId(tc.id); setViewMode('data'); }}
               className={`w-full text-left p-3 rounded-lg border transition-all flex items-start gap-3
-                ${selectedCase?.id === tc.id 
-                  ? 'bg-blue-900/20 border-blue-700/50' 
+                ${selectedCase?.id === tc.id
+                  ? 'bg-blue-900/20 border-blue-700/50'
                   : 'bg-gray-800/50 border-transparent hover:bg-gray-800'
                 }
               `}
@@ -71,99 +91,127 @@ export const ResultsView: React.FC<ResultsViewProps> = ({ testCases, logs, onDow
             </button>
           ))}
         </div>
-        
+
         <div className="p-4 border-t border-gray-800 bg-gray-850">
-           <button
-             onClick={onDownload}
-             disabled={!isFinished}
-             className={`w-full py-2 px-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-all
-               ${isFinished 
-                 ? 'bg-green-600 hover:bg-green-500 text-white' 
-                 : 'bg-gray-800 text-gray-500 cursor-not-allowed'}
+          <button
+            onClick={onDownload}
+            disabled={!isFinished}
+            className={`w-full py-2 px-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-all
+               ${isFinished
+                ? 'bg-green-600 hover:bg-green-500 text-white'
+                : 'bg-gray-800 text-gray-500 cursor-not-allowed'}
              `}
-           >
-             <Download className="w-4 h-4" />
-             Download ZIP
-           </button>
+          >
+            <Download className="w-4 h-4" />
+            Download ZIP
+          </button>
         </div>
       </div>
 
       {/* Middle: Detail View */}
       <div className="lg:col-span-2 flex flex-col gap-6">
         <div className="bg-gray-900 rounded-xl border border-gray-800 flex-1 flex flex-col overflow-hidden min-h-[400px]">
-           {selectedCase ? (
-             <>
-               <div className="p-4 border-b border-gray-800 bg-gray-850 flex items-center justify-between">
-                 <div>
-                   <h3 className="font-semibold text-gray-200 flex items-center gap-2">
-                     {selectedCase.name}
-                     <span className={`text-xs px-2 py-0.5 rounded-full border ${getTypeColor(selectedCase.type)}`}>
-                       {selectedCase.type}
-                     </span>
-                     {selectedCase.generationMethod === 'script' && (
-                       <span className="text-xs px-2 py-0.5 rounded-full border bg-yellow-900/20 text-yellow-400 border-yellow-800 flex items-center gap-1">
-                         <FileCode className="w-3 h-3" /> Script + Exec
-                       </span>
-                     )}
-                   </h3>
-                   <p className="text-xs text-gray-500 mt-1">{selectedCase.description}</p>
-                 </div>
-                 
-                 {selectedCase.generationMethod === 'script' && (
-                   <div className="flex bg-gray-800 rounded-lg p-1">
-                     <button 
-                        onClick={() => setViewMode('data')}
-                        className={`px-3 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1
+          {selectedCase ? (
+            <>
+              <div className="p-4 border-b border-gray-800 bg-gray-850 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-200 flex items-center gap-2">
+                    {selectedCase.name}
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${getTypeColor(selectedCase.type)}`}>
+                      {selectedCase.type}
+                    </span>
+                    {selectedCase.generationMethod === 'script' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border bg-yellow-900/20 text-yellow-400 border-yellow-800 flex items-center gap-1">
+                        <FileCode className="w-3 h-3" /> Script + Exec
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">{selectedCase.description}</p>
+                </div>
+
+                {selectedCase.generationMethod === 'script' && (
+                  <div className="flex bg-gray-800 rounded-lg p-1">
+                    <button
+                      onClick={() => setViewMode('data')}
+                      className={`px-3 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1
                           ${viewMode === 'data' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-300'}
                         `}
-                     >
-                        <Database className="w-3 h-3" /> Generated Data
-                     </button>
-                     <button 
-                        onClick={() => setViewMode('script')}
-                        className={`px-3 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1
+                    >
+                      <Database className="w-3 h-3" /> Generated Data
+                    </button>
+                    <button
+                      onClick={() => setViewMode('script')}
+                      className={`px-3 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1
                           ${viewMode === 'script' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-300'}
                         `}
-                     >
-                        <Code2 className="w-3 h-3" /> Python Script
-                     </button>
-                   </div>
-                 )}
-               </div>
-               
-               <div className="flex-1 overflow-hidden grid grid-cols-2 divide-x divide-gray-800">
-                  <div className="flex flex-col h-full col-span-2 lg:col-span-1 lg:border-r border-gray-800">
-                    <div className="px-3 py-2 bg-gray-800/50 text-xs font-mono text-gray-400 border-b border-gray-800 flex justify-between items-center">
-                      <span>
-                        {viewMode === 'script' && selectedCase.generationMethod === 'script' 
-                            ? 'Generator Code (Python)' 
-                            : 'Input Data (.in)'}
-                      </span>
-                    </div>
-                    <pre className="flex-1 p-4 overflow-auto font-mono text-sm text-gray-300 whitespace-pre-wrap">
+                    >
+                      <Code2 className="w-3 h-3" /> Python Script
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-hidden grid grid-cols-2 divide-x divide-gray-800">
+                <div className="flex flex-col h-full col-span-2 lg:col-span-1 lg:border-r border-gray-800">
+                  <div className="px-3 py-2 bg-gray-800/50 text-xs font-mono text-gray-400 border-b border-gray-800 flex justify-between items-center">
+                    <span>
                       {viewMode === 'script' && selectedCase.generationMethod === 'script'
-                        ? (selectedCase.scriptContent || <span className="text-gray-600 italic">No script...</span>)
-                        : (selectedCase.input || <span className="text-gray-600 italic">Generating...</span>)
-                      }
-                    </pre>
+                        ? 'Generator Code (Python)'
+                        : 'Input Data (.in)'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (viewMode === 'script' && selectedCase.scriptContent) {
+                          downloadSingleFile(`${selectedCase.name}_generator.py`, selectedCase.scriptContent);
+                        } else if (selectedCase.input) {
+                          downloadSingleFile(`${selectedCase.name}.in`, selectedCase.input);
+                        }
+                      }}
+                      disabled={!(viewMode === 'script' ? selectedCase.scriptContent : selectedCase.input)}
+                      className="text-blue-400 hover:text-blue-300 disabled:opacity-50 transition-colors flex items-center gap-1"
+                      title="Download this file"
+                    >
+                      <Download className="w-3 h-3" />
+                    </button>
                   </div>
-                  <div className="flex flex-col h-full col-span-2 lg:col-span-1">
-                    <div className="px-3 py-2 bg-gray-800/50 text-xs font-mono text-gray-400 border-b border-gray-800 flex justify-between">
-                      <span>Expected Output (.out)</span>
-                      <span className="text-yellow-600 text-[10px] uppercase">AI Simulated</span>
+                  <pre className="flex-1 p-4 overflow-auto font-mono text-sm text-gray-300 whitespace-pre-wrap">
+                    {viewMode === 'script' && selectedCase.generationMethod === 'script'
+                      ? renderContent(selectedCase.scriptContent, "No script...")
+                      : renderContent(selectedCase.input, "Generating...")
+                    }
+                  </pre>
+                </div>
+                <div className="flex flex-col h-full col-span-2 lg:col-span-1">
+                  <div className="px-3 py-2 bg-gray-800/50 text-xs font-mono text-gray-400 border-b border-gray-800 flex justify-between items-center">
+                    <span>Expected Output (.out)</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-yellow-600 text-[10px] uppercase">Local Compiled</span>
+                      <button
+                        onClick={() => {
+                          if (selectedCase.expectedOutput) {
+                            downloadSingleFile(`${selectedCase.name}.out`, selectedCase.expectedOutput);
+                          }
+                        }}
+                        disabled={!selectedCase.expectedOutput}
+                        className="text-green-400 hover:text-green-300 disabled:opacity-50 transition-colors flex items-center gap-1"
+                        title="Download .out file"
+                      >
+                        <Download className="w-3 h-3" />
+                      </button>
                     </div>
-                    <pre className="flex-1 p-4 overflow-auto font-mono text-sm text-gray-300 whitespace-pre-wrap">
-                      {selectedCase.expectedOutput || <span className="text-gray-600 italic">Waiting for input...</span>}
-                    </pre>
                   </div>
-               </div>
-             </>
-           ) : (
-             <div className="flex-1 flex flex-col items-center justify-center text-gray-600">
-               <Eye className="w-12 h-12 mb-4 opacity-50" />
-               <p>Select a test case to view details</p>
-             </div>
-           )}
+                  <pre className="flex-1 p-4 overflow-auto font-mono text-sm text-gray-300 whitespace-pre-wrap">
+                    {renderContent(selectedCase.expectedOutput, "Waiting for input...")}
+                  </pre>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-600">
+              <Eye className="w-12 h-12 mb-4 opacity-50" />
+              <p>Select a test case to view details</p>
+            </div>
+          )}
         </div>
 
         {/* Logs Console */}
